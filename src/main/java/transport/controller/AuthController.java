@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import transport.dto.LoginRequest;
+import transport.dto.RegisterRequest;
 import transport.entity.User;
 import transport.repository.UserRepository;
 import transport.util.JwtUtil;
@@ -30,6 +31,28 @@ public class AuthController {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+        if (userRepository.findAll().stream().anyMatch(u -> u.getEmail().equalsIgnoreCase(request.getEmail()))) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Email is already taken!");
+        }
+
+        User user = new User();
+        user.setFullName(request.getName());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(request.getRole() != null ? request.getRole() : "STUDENT");
+
+        userRepository.save(user);
+
+        Map<String, Object> response = new HashMap<>();
+        response.message = "User registered successfully!";
+        response.put("email", user.getEmail());
+        response.put("role", user.getRole());
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
