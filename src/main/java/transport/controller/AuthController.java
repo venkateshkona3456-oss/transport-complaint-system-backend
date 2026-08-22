@@ -35,20 +35,20 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
-        if (userRepository.findAll().stream().anyMatch(u -> u.getEmail().equalsIgnoreCase(request.getEmail()))) {
+        if (userRepository.findAll().stream().anyMatch(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(request.getEmail()))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Email is already taken!");
         }
 
         User user = new User();
-        user.setFullName(request.getName());
+        user.setFullName(request.getFullName() != null ? request.getFullName() : request.getEmail());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole(request.getRole() != null ? request.getRole() : "STUDENT");
+        user.setRole("STUDENT");
 
         userRepository.save(user);
 
         Map<String, Object> response = new HashMap<>();
-        response.message = "User registered successfully!";
+        response.put("message", "User registered successfully!");
         response.put("email", user.getEmail());
         response.put("role", user.getRole());
 
@@ -59,7 +59,7 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
 
         User user = userRepository.findAll().stream()
-                .filter(u -> u.getEmail().equalsIgnoreCase(request.getEmail()))
+                .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(request.getEmail()))
                 .findFirst()
                 .orElse(null);
 
