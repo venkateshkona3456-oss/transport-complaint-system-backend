@@ -15,8 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 import transport.entity.Complaint;
 import transport.entity.Notification;
 import transport.entity.Student;
+import transport.entity.User;
 import transport.repository.NotificationRepository;
 import transport.repository.StudentRepository;
+import transport.repository.UserRepository;
 import transport.service.ComplaintService;
 
 @RestController
@@ -27,12 +29,14 @@ public class ComplaintController {
     private final ComplaintService complaintService;
     private final StudentRepository studentRepository;
     private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
 
     public ComplaintController(ComplaintService complaintService, StudentRepository studentRepository,
-            NotificationRepository notificationRepository) {
+            NotificationRepository notificationRepository, UserRepository userRepository) {
         this.complaintService = complaintService;
         this.studentRepository = studentRepository;
         this.notificationRepository = notificationRepository;
+        this.userRepository = userRepository;
     }
 
     @GetMapping
@@ -61,9 +65,12 @@ public class ComplaintController {
     @PutMapping("/{id}/status")
     public org.springframework.http.ResponseEntity<?> updateComplaintStatus(@PathVariable Long id, @RequestBody Complaint statusUpdate) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        Student requester = studentRepository.findByUser_Email(email);
+        User user = userRepository.findByEmail(email).orElse(null);
 
-        if (requester != null) {
+        boolean isAdmin = user != null && user.getRole() != null
+                && "ROLE_ADMIN".equalsIgnoreCase(user.getRole().toString());
+
+        if (!isAdmin) {
             return org.springframework.http.ResponseEntity.status(403).body("Only admin can update complaint status");
         }
 
