@@ -1,16 +1,10 @@
 package transport.controller;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 
 import transport.entity.Complaint;
 import transport.entity.ComplaintImage;
@@ -33,11 +30,27 @@ public class ComplaintImageController {
 
     private final ComplaintImageRepository complaintImageRepository;
     private final ComplaintService complaintService;
-    private final String uploadDir = "uploads/complaint-images";
+
+    @Value("${cloudinary.cloud-name}")
+    private String cloudName;
+
+    @Value("${cloudinary.api-key}")
+    private String apiKey;
+
+    @Value("${cloudinary.api-secret}")
+    private String apiSecret;
 
     public ComplaintImageController(ComplaintImageRepository complaintImageRepository, ComplaintService complaintService) {
         this.complaintImageRepository = complaintImageRepository;
         this.complaintService = complaintService;
+    }
+
+    private Cloudinary getCloudinary() {
+        return new Cloudinary(ObjectUtils.asMap(
+                "cloud_name", cloudName,
+                "api_key", apiKey,
+                "api_secret", apiSecret
+        ));
     }
 
     @PostMapping("/{id}/images")
@@ -48,22 +61,13 @@ public class ComplaintImageController {
                 return ResponseEntity.status(404).body("Complaint not found");
             }
 
-            Path uploadPath = Paths.get(uploadDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
-            String originalName = file.getOriginalFilename();
-            String extension = originalName != null && originalName.contains(".")
-                    ? originalName.substring(originalName.lastIndexOf("."))
-                    : "";
-            String fileName = UUID.randomUUID().toString() + extension;
-            Path targetPath = uploadPath.resolve(fileName);
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            Cloudinary cloudinary = getCloudinary();
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
+            String imageUrl = (String) uploadResult.get("secure_url");
 
             ComplaintImage image = new ComplaintImage();
             image.setComplaint(complaint);
-            image.setImageUrl("/api/complaints/images/" + fileName);
+            image.setImageUrl(imageUrl);
             ComplaintImage saved = complaintImageRepository.save(image);
 
             return ResponseEntity.ok(saved);
@@ -75,19 +79,5 @@ public class ComplaintImageController {
     @GetMapping("/{id}/images")
     public List<ComplaintImage> getImagesForComplaint(@PathVariable Long id) {
         return complaintImageRepository.findByComplaint_Id(id);
-    }
-
-    @GetMapping("/images/{fileName}")
-    public ResponseEntity<Resource> getImage(@PathVariable String fileName) {
-        try {
-            Path filePath = Paths.get(uploadDir).resolve(fileName);
-            Resource resource = new UrlResource(filePath.toUri());
-            if (!resource.exists()) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG).body(resource);
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
     }
 }
